@@ -1,0 +1,35 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #ffffff;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+
+.leaflet-popup-content {
+  margin: 10px 14px;
+  font-size: 0.9rem;
+}
