@@ -445,7 +445,12 @@ export default function OptimizationProPage({
                               {forecast.current_estimated_feed_kg_day} kg
                               <div className="subtext">({sourceLabel})</div>
                             </td>
-                            <td>{`${forecast.suggested_feed_kg_day} kg (${forecast.suggested_change_pct > 0 ? '+' : ''}${forecast.suggested_change_pct}%)`}</td>
+                            <td>
+                              <div>{forecast.suggested_feed_kg_day} kg</div>
+                              <span className={`delta-pill ${forecast.suggested_change_pct > 0 ? 'positive' : forecast.suggested_change_pct < 0 ? 'negative' : 'neutral'}`}>
+                                {forecast.suggested_change_pct > 0 ? '+' : ''}{forecast.suggested_change_pct}%
+                              </span>
+                            </td>
                             <td>
                               <strong>{forecast.plan_label || forecast.suggestion}</strong>
                               <div className="subtext">{forecast.note}</div>

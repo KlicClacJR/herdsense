@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ServiceTicketModal from './ServiceTicketModal';
 
 const METRIC_ROWS = [
@@ -97,6 +97,7 @@ export default function HealthAlertsPage({
   const [reportOpen, setReportOpen] = useState(false);
   const [issuePreset, setIssuePreset] = useState('');
   const [selectedCowId, setSelectedCowId] = useState('');
+  const detailsPanelRef = useRef(null);
 
   const counts = useMemo(() => {
     const rows = alertsData.insights || [];
@@ -135,6 +136,12 @@ export default function HealthAlertsPage({
     return filtered.sort((a, b) => (b.urgency_score || 0) - (a.urgency_score || 0));
   }, [alertsData.insights, cows, selectedFilters, sortBy]);
 
+  const alertInsights = useMemo(
+    () => (alertsData.insights || []).filter((item) => item.display_risk_band_key !== 'low'),
+    [alertsData.insights]
+  );
+  const highestAlertInsight = alertInsights[0] || null;
+
   useEffect(() => {
     if (!filteredInsights.length) {
       setSelectedCowId('');
@@ -144,6 +151,14 @@ export default function HealthAlertsPage({
       setSelectedCowId(filteredInsights[0].cow_id);
     }
   }, [filteredInsights, selectedCowId]);
+
+  useEffect(() => {
+    if (!demoMode || !highestAlertInsight) return;
+    const selected = (alertsData.insights || []).find((item) => item.cow_id === selectedCowId);
+    if (!selected || selected.display_risk_band_key === 'low') {
+      setSelectedCowId(highestAlertInsight.cow_id);
+    }
+  }, [demoMode, highestAlertInsight, selectedCowId, alertsData.insights]);
 
   const selectedInsight = useMemo(
     () => filteredInsights.find((item) => item.cow_id === selectedCowId) || filteredInsights[0] || null,
@@ -155,6 +170,30 @@ export default function HealthAlertsPage({
   );
   const selectedSignal = selectedCow ? (todaySignalsByTag[selectedCow.ear_tag_id] || {}) : {};
   const selectedBaseline = selectedCow ? (baselinesByTag[selectedCow.ear_tag_id] || {}) : {};
+  const selectedAlertIndex = useMemo(
+    () => alertInsights.findIndex((item) => item.cow_id === selectedInsight?.cow_id),
+    [alertInsights, selectedInsight]
+  );
+
+  const scrollToCowAndDetails = (earTag) => {
+    if (!earTag) return;
+    window.setTimeout(() => {
+      document.getElementById(`cow-${earTag}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 40);
+    window.setTimeout(() => {
+      detailsPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      detailsPanelRef.current?.focus({ preventScroll: true });
+    }, 120);
+  };
+
+  const selectInsight = (insight, options = {}) => {
+    if (!insight) return;
+    const targetCow = cows.find((item) => item.cow_id === insight.cow_id);
+    setSelectedCowId(insight.cow_id);
+    if (options.ensureVisible) {
+      scrollToCowAndDetails(targetCow?.ear_tag_id);
+    }
+  };
 
   const toggleChip = (key) => {
     setSelectedFilters((prev) => {
@@ -178,6 +217,20 @@ export default function HealthAlertsPage({
     if (!manualTag.trim()) return;
     onAddDetectedTag(manualTag.trim(), 'manual_confirm');
     setManualTag('');
+  };
+
+  const viewHighestRisk = () => {
+    if (!highestAlertInsight) return;
+    const targetBand = highestAlertInsight.display_risk_band_key === 'high' ? 'high' : 'moderate';
+    setSelectedFilters(['active', targetBand]);
+    selectInsight(highestAlertInsight, { ensureVisible: true });
+  };
+
+  const goToAdjacentAlert = (direction) => {
+    if (!alertInsights.length) return;
+    const currentIndex = selectedAlertIndex >= 0 ? selectedAlertIndex : 0;
+    const nextIndex = (currentIndex + direction + alertInsights.length) % alertInsights.length;
+    selectInsight(alertInsights[nextIndex], { ensureVisible: true });
   };
 
   return (
@@ -219,6 +272,20 @@ export default function HealthAlertsPage({
           <span>Active cows</span>
         </div>
       </section>
+
+      {highestAlertInsight && (
+        <section className="panel jump-bar">
+          <div>
+            <strong>{alertInsights.length} cow{alertInsights.length === 1 ? '' : 's'} needs attention</strong>
+            <p className="subtext">
+              Jump straight to the highest-risk details.
+            </p>
+          </div>
+          <button type="button" className="btn-primary" onClick={viewHighestRisk}>
+            View {cows.find((c) => c.cow_id === highestAlertInsight.cow_id)?.name || 'highest risk'}
+          </button>
+        </section>
+      )}
 
       {baselineRecalibrationDaysLeft > 0 && (
         <section className="panel warning-panel">
@@ -276,32 +343,65 @@ export default function HealthAlertsPage({
               const summary = shortReason(insight);
               const isActive = selectedInsight?.cow_id === insight.cow_id;
               return (
-                <article key={insight.cow_id} className={`health-card compact ${isActive ? 'active' : ''}`}>
+                <article
+                  key={insight.cow_id}
+                  id={`cow-${cow?.ear_tag_id || insight.cow_id}`}
+                  className={`health-card compact ${isActive ? 'active' : ''}`}
+                >
                   <div className="health-card-head">
                     <div>
                       <h3>{cow?.name || insight.cow_id}</h3>
                       <p className="subtext">Ear tag: {cow?.ear_tag_id}</p>
                     </div>
-                    <span className={`risk-pill ${badgeClass(insight.display_risk_band_key)}`}>
-                      {insight.display_risk_band_key === 'high' ? 'HIGH' : insight.display_risk_band_key === 'moderate' ? 'MODERATE' : 'LOW'}
-                    </span>
+                    <div className="row-badges">
+                      {insight.display_risk_band_key === 'high' && <span className="list-high-badge">HIGH</span>}
+                      <span className={`risk-pill ${badgeClass(insight.display_risk_band_key)}`}>
+                        {insight.display_risk_band_key === 'high' ? 'HIGH' : insight.display_risk_band_key === 'moderate' ? 'MODERATE' : 'LOW'}
+                      </span>
+                    </div>
                   </div>
                   <p className="risk-line">
                     Overall Health Risk: {insight.overall_risk_pct}% ({insight.display_risk_band || 'Low'})
                   </p>
                   <p className="risk-reason">{summary}</p>
-                  <button type="button" className="btn-link" onClick={() => setSelectedCowId(insight.cow_id)}>
-                    {isActive ? 'Viewing details' : 'View details'}
-                  </button>
+                  <div className="row-actions">
+                    <button type="button" className="btn-link" onClick={() => selectInsight(insight, { ensureVisible: true })}>
+                      {isActive ? 'Viewing details' : 'View details'}
+                    </button>
+                    {isActive && <span className="selected-chip">Selected</span>}
+                  </div>
                 </article>
               );
             })}
           </div>
 
-          <aside className="panel health-detail-panel">
+          <aside
+            ref={detailsPanelRef}
+            tabIndex={-1}
+            className="panel health-detail-panel"
+            aria-label="Selected cow details"
+          >
             {!selectedInsight && <p className="subtext">Select a cow to view details.</p>}
             {selectedInsight && (
               <>
+                <div className="detail-nav-row">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => goToAdjacentAlert(-1)}
+                    disabled={alertInsights.length < 2}
+                  >
+                    ◀ Prev alert
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => goToAdjacentAlert(1)}
+                    disabled={alertInsights.length < 2}
+                  >
+                    Next alert ▶
+                  </button>
+                </div>
                 <div className="health-card-head">
                   <div>
                     <h3>{selectedCow?.name || selectedInsight.cow_id}</h3>

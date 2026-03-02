@@ -234,6 +234,10 @@ body {
 .health-list {
   display: grid;
   gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
 }
 
 .health-card {
@@ -252,6 +256,7 @@ body {
 .health-card.compact.active {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   background: #f2f8f6;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .health-card-head {
@@ -309,9 +314,80 @@ body {
 
 .health-detail-panel {
   position: sticky;
-  top: 88px;
+  top: 20px;
   align-self: start;
   margin: 0;
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+.jump-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.list-high-badge {
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b42318;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selected-chip {
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.delta-pill {
+  display: inline-flex;
+  margin-top: 4px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.delta-pill.positive {
+  background: #e9f8ee;
+  color: #136f3a;
+}
+
+.delta-pill.negative {
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.delta-pill.neutral {
+  background: #f3f5f8;
+  color: #475467;
+}
+
+.detail-nav-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .health-filter-chips {
@@ -955,6 +1031,8 @@ textarea {
 
   .health-detail-panel {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .leaks-row {
@@ -997,6 +1075,17 @@ textarea {
 
   .screen-header h1 {
     font-size: 1.48rem;
+  }
+
+  .jump-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .health-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
 }

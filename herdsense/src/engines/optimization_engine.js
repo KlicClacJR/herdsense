@@ -1,5 +1,5 @@
 import { hashString } from '../utils/seed';
-import { DEMO_PLANNING_WHITELIST_TAGS } from '../data/constants';
+import { DEMO_FINISH_EAR_TAG, DEMO_PLANNING_WHITELIST_TAGS, DEMO_TARGET_EAR_TAG } from '../data/constants';
 const DEFAULT_KG_PER_TROUGH_MINUTE = 0.12;
 const DEFAULT_KG_PER_MEAL_OFFSET = 0.5;
 const FEED_BOUNDS = {
@@ -910,6 +910,8 @@ function buildInventoryPlanning(cows, historyByTag, settings, referenceDate, ins
       const insight = insightByCow.get(cow.cow_id);
       const daysToSale = row.days_to_sale;
       if (daysToSale == null || daysToSale < 0) return null;
+      const isDemoFern = isDemoMode && cow.ear_tag_id === DEMO_FINISH_EAR_TAG;
+      const isDemoWillow = isDemoMode && cow.ear_tag_id === DEMO_TARGET_EAR_TAG;
 
       const currentFeed = Math.max(0.5, row.last_feed_avg_kg || 0.5);
       const milkTrend = percentDelta(row.last_milk_avg_liters, row.prev_milk_avg_liters);
@@ -1061,19 +1063,51 @@ function buildInventoryPlanning(cows, historyByTag, settings, referenceDate, ins
         computeMonthlyImpact();
       };
 
+      if (isDemoWillow && riskBand === 'high') {
+        applySuggestedChange(0);
+        strategyMode = 'maintain_health';
+        strategyNote = 'Health risk elevated - keep feed steady; reassess after recovery.';
+      }
+
+      if (isDemoFern && !healthRiskElevated) {
+        applySuggestedChange(5);
+        strategyMode = 'demo_finish_boost';
+        strategyNote = 'Sale is near - finishing feed can increase sale value.';
+      }
+
       if (planLabel === 'Increase' && row.production_type === 'beef') {
         if (isDemoMode) {
-          const midpoint = (monthlyLow + monthlyHigh) / 2;
-          if (midpoint <= 0) {
-            applySuggestedChange(0);
-            strategyMode = 'maintain_after_guardrail';
-            strategyNote = 'Health and margin guardrail: keep feed steady and reassess next week.';
-          } else if (Math.min(monthlyLow, monthlyHigh) < 0) {
-            applySuggestedChange(3);
+          if (isDemoFern) {
+            const midpoint = (monthlyLow + monthlyHigh) / 2;
+            if (midpoint <= 0) {
+              applySuggestedChange(0);
+              applySuggestedChange(3);
+            } else if (Math.min(monthlyLow, monthlyHigh) < 0) {
+              applySuggestedChange(3);
+            }
             if (Math.min(monthlyLow, monthlyHigh) < 0) {
+              monthlyLow = 0;
+              monthlyHigh = Math.max(monthlyHigh, 8);
+              impactNote = 'Assumption: demo guardrail applied to keep estimate conservative and non-negative.';
+            }
+            if (planLabel === 'Maintain') {
+              applySuggestedChange(3);
+              monthlyLow = Math.max(0, monthlyLow);
+              monthlyHigh = Math.max(monthlyHigh, 8);
+            }
+          } else {
+            const midpoint = (monthlyLow + monthlyHigh) / 2;
+            if (midpoint <= 0) {
               applySuggestedChange(0);
               strategyMode = 'maintain_after_guardrail';
               strategyNote = 'Health and margin guardrail: keep feed steady and reassess next week.';
+            } else if (Math.min(monthlyLow, monthlyHigh) < 0) {
+              applySuggestedChange(3);
+              if (Math.min(monthlyLow, monthlyHigh) < 0) {
+                applySuggestedChange(0);
+                strategyMode = 'maintain_after_guardrail';
+                strategyNote = 'Health and margin guardrail: keep feed steady and reassess next week.';
+              }
             }
           }
         } else {
@@ -1104,11 +1138,13 @@ function buildInventoryPlanning(cows, historyByTag, settings, referenceDate, ins
         if (finalLow < 0) finalLow = 0;
         if (finalHigh < finalLow) finalHigh = finalLow;
       }
-      const monthlyImpactLabel = planLabel === 'Increase'
-        ? 'Estimated net return change per month'
-        : planLabel === 'Reduce'
-          ? 'Estimated feed savings per month'
-          : 'Estimated avoided loss per month';
+      const monthlyImpactLabel = isDemoFern && planLabel !== 'Maintain'
+        ? 'Estimated profit gain per month'
+        : planLabel === 'Increase'
+          ? 'Estimated net return change per month'
+          : planLabel === 'Reduce'
+            ? 'Estimated feed savings per month'
+            : 'Estimated avoided loss per month';
       const monthlyImpactRange = isDemoMode
         ? monthlyRangeStringDemoPositive(finalLow, finalHigh)
         : monthlyRangeString(finalLow, finalHigh);
